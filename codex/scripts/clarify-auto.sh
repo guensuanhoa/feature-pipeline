@@ -8,7 +8,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROMPT_FILE="$SCRIPT_DIR/../prompts/clarify-auto.md"
 
-MODEL="${1:-gpt-6.1-sol}"
+MODEL="${1:-gpt-6-luna}"
 ROUND="${2:-?}"
 EFFORT="${3:-high}"
 [[ "$MODEL" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Model không hợp lệ: $MODEL"; echo "CLARIFY_STATUS=OPEN"; exit 0; }

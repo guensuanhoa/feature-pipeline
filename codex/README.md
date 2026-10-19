@@ -3,8 +3,8 @@
 Bản Codex của `feature-pipeline/`. Cùng luồng, nhưng mọi bước agent gọi Codex CLI thay cho Claude CLI. Bản Claude giữ nguyên, hai bản cài song song được.
 
 ```
-dò lệnh test (lần đầu) → specify (gpt-6.1-sol) → tự clarify tối đa 3 vòng
-→ [hỏi bạn nếu vẫn còn câu hỏi] → [bạn duyệt spec] → plan → tasks (gpt-6.1-sol)
+dò lệnh test (lần đầu) → specify (gpt-6-luna) → tự clarify tối đa 3 vòng
+→ [hỏi bạn nếu vẫn còn câu hỏi] → [bạn duyệt spec] → plan → tasks (gpt-6-luna)
 → implement (gpt-6-luna) → kiểm tra độc lập → tự sửa tối đa 2 lần (gpt-6-luna)
 → [hỏi bạn nếu vẫn fail] → tóm tắt
 ```
@@ -23,7 +23,7 @@ Bạn chỉ tham gia ở: duyệt spec (luôn có), xác nhận lệnh test (ch�
 | Lệnh agent (bước `command:`) | `claude -p /speckit-<step>` | `codex exec "$speckit-<step> ..."` |
 | Lệnh agent (script) | `claude -p ...` | `codex exec ... --sandbox workspace-write` |
 | Quyền | `.claude/settings.local.json` allowlist | Sandbox `workspace-write` (ghi trong repo, không có mạng) |
-| Model | `opus` / `sonnet` / `haiku` | `gpt-6.1-sol` (plan), `gpt-6-luna` (impl), `gpt-5.6-terra`, `gpt-6-astra` |
+| Model | `opus` / `sonnet` / `haiku` | `gpt-6-luna` (plan), `gpt-6-luna` (impl), `gpt-5.6-terra`, `gpt-6-astra` |
 | Effort | không có | `plan_effort` (high), `impl_effort` (medium) |
 | Tìm thư mục feature | thư mục khớp tên nhánh | `.specify/feature.json` trước, rồi fallback cũ |
 

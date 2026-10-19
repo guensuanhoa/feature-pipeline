@@ -7,7 +7,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROMPT_FILE="$SCRIPT_DIR/../prompts/update-requirement.md"
 
-MODEL="${1:-gpt-6.1-sol}"
+MODEL="${1:-gpt-6-luna}"
 EFFORT="${2:-high}"
 [[ "$MODEL" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Model không hợp lệ: $MODEL"; exit 0; }
 case "$EFFORT" in
