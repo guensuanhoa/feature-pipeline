@@ -1,0 +1,239 @@
+schema_version: "1.0"
+workflow:
+  id: "feature-pipeline"
+  name: "Feature pipeline v0"
+  version: "0.1.0"
+  author: "team"
+  description: "specify -> clarify toi da 3 vong -> duyet spec -> plan -> tasks -> implement -> kiem tra doc lap + tu sua toi da 2 lan"
+
+requires:
+  speckit_version: ">=1.0.0"
+  integrations:
+    any:
+      - "claude"
+
+inputs:
+  spec:
+    type: string
+    required: true
+    prompt: "Mo ta feature, hoac: Doc yeu cau trong <duong-dan-file-handoff>"
+  # Prepended to plan/tasks/implement args: agents run headless, nobody answers questions
+  agent_preamble:
+    type: string
+    default: "Pipeline tu dong, khong co nguoi tra loi. Khong hoi nguoi dung, khong dung cho xac nhan. Quyet dinh trong muc Clarifications cua spec la da chot. Rule nao yeu cau skill chua cai thi ap truc tiep noi dung rule do."
+  plan_model:
+    type: string
+    enum: [opus, sonnet]
+    default: "opus"
+  impl_model:
+    type: string
+    enum: [sonnet, opus, haiku]
+    default: "sonnet"
+  commands_verdict:
+    type: string
+    enum: ["", approve, reject]
+    default: ""
+  spec_verdict:
+    type: string
+    enum: ["", approve, reject]
+    default: ""
+  checks_verdict:
+    type: string
+    enum: ["", approve, reject]
+    default: ""
+  questions_verdict:
+    type: string
+    enum: ["", continue, important]
+    default: ""
+
+steps:
+  # Spec Kit captures shell step output without printing it; tee to /dev/tty keeps it visible
+  # (falls back to plain stdout when there is no terminal, e.g. CI).
+  # 1. Do lenh build/lint/test mot lan, luu vao .specify/pipeline/commands.env
+  - id: prepare-commands
+    type: shell
+    run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/detect-commands.sh" | { tee /dev/tty 2>/dev/null || cat; }'
+
+  # Chi dung lai hoi ban o lan dau, khi file lenh vua duoc tao
+  - id: confirm-commands
+    type: if
+    condition: "{{ steps.prepare-commands.output.stdout | contains('COMMANDS_CREATED') }}"
+    then:
+      - id: review-commands
+        type: gate
+        message: "Lan chay dau: mo .specify/pipeline/commands.env, kiem tra lenh build/lint/test. Sua neu can, roi approve."
+        options: [approve, reject]
+        on_reject: abort
+        verdict_input: commands_verdict
+
+  # 2. Viet spec bang model manh
+  - id: announce-specify-model
+    type: shell
+    run: 'echo "MODEL: specify = {{ inputs.plan_model }}" | { tee /dev/tty 2>/dev/null || cat; }'
+
+  - id: specify
+    command: speckit.specify
+    integration: claude
+    model: "{{ inputs.plan_model }}"
+    input:
+      args: "{{ inputs.spec }}"
+
+  # In ra thu muc feature va so cho con danh dau NEEDS CLARIFICATION
+  - id: locate-feature
+    type: shell
+    run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/locate-feature.sh" | { tee /dev/tty 2>/dev/null || cat; }'
+
+  # 2b. Tu lam ro spec toi da 3 vong. Moi vong tu bo qua neu spec da het NEEDS CLARIFICATION.
+  - id: clarify-1
+    type: shell
+    # Agent runs can exceed the engine's 300s default.
+    timeout: 1800
+    run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/clarify-auto.sh" {{ inputs.plan_model }} 1 | { tee /dev/tty 2>/dev/null || cat; }'
+
+  - id: clarify-2
+    type: shell
+    # Agent runs can exceed the engine's 300s default.
+    timeout: 1800
+    run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/clarify-auto.sh" {{ inputs.plan_model }} 2 | { tee /dev/tty 2>/dev/null || cat; }'
+
+  - id: clarify-3
+    type: shell
+    # Agent runs can exceed the engine's 300s default.
+    timeout: 1800
+    run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/clarify-auto.sh" {{ inputs.plan_model }} 3 | { tee /dev/tty 2>/dev/null || cat; }'
+
+  # Vong 4: van con cau hoi thi hoi ban co quan trong khong.
+  # Quan trong: tra loi de cap nhat yeu cau goc, roi dung de ban chay lai tu dau.
+  - id: still-unclear
+    type: if
+    condition: "{{ steps.clarify-3.output.stdout | contains('CLARIFY_STATUS=OPEN') }}"
+    then:
+      - id: questions-importance
+        type: gate
+        message: "Sau 3 vong clarify spec van con cau hoi mo, xem .specify/pipeline/open-questions.md. continue = khong quan trong, chay tiep. important = tra loi de cap nhat yeu cau goc roi dung pipeline."
+        options: [continue, important]
+        # No reject option here; skip only satisfies the validator's on_reject rule
+        on_reject: skip
+        verdict_input: questions_verdict
+
+      - id: answer-questions
+        type: if
+        condition: "{{ steps.questions-importance.output.choice == 'important' }}"
+        then:
+          - id: update-requirement
+            type: shell
+            # Agent runs can exceed the engine's 300s default.
+            timeout: 1800
+            run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/update-requirement.sh" {{ inputs.plan_model }} | { tee /dev/tty 2>/dev/null || cat; }'
+
+          - id: stop-for-rerun
+            type: gate
+            message: "Yeu cau goc da duoc cap nhat. Pipeline dung o day, hay chay lai lenh specify workflow run tu dau."
+            options: [abort]
+            on_reject: abort
+        # continue = suggestions are good enough: write them into spec.md as decisions
+        else:
+          - id: accept-suggestions
+            type: shell
+            run: 'out=$(bash "$SPECKIT_WORKFLOW_DIR/scripts/accept-suggestions.sh"); rc=$?; printf "%s\n" "$out" | { tee /dev/tty 2>/dev/null || cat; }; exit $rc'
+
+  # Recount markers so the spec review gate below sees the current state
+  - id: relocate-feature
+    type: shell
+    run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/locate-feature.sh" | { tee /dev/tty 2>/dev/null || cat; }'
+
+  # 3. Gate duy nhat luon dung: ban doc nhanh spec
+  - id: review-spec
+    type: gate
+    message: "Doc nhanh spec.md (duong dan in o buoc locate-feature ngay tren). Neu con canh bao NEEDS CLARIFICATION, xu ly truoc. approve de chay tiep, reject de dung."
+    options: [approve, reject]
+    on_reject: abort
+    verdict_input: spec_verdict
+
+  # 4. Plan va tasks bang model manh
+  - id: announce-plan-model
+    type: shell
+    run: 'echo "MODEL: plan + tasks = {{ inputs.plan_model }}" | { tee /dev/tty 2>/dev/null || cat; }'
+
+  - id: plan
+    command: speckit.plan
+    integration: claude
+    model: "{{ inputs.plan_model }}"
+    input:
+      args: "{{ inputs.agent_preamble }} {{ inputs.spec }}"
+
+  # Spec Kit reports exit 0 even when the agent wrote nothing; stop here instead
+  - id: guard-plan
+    type: shell
+    run: 'out=$(bash "$SPECKIT_WORKFLOW_DIR/scripts/require-artifact.sh" plan); rc=$?; printf "%s\n" "$out" | { tee /dev/tty 2>/dev/null || cat; }; exit $rc'
+
+  - id: tasks
+    command: speckit.tasks
+    integration: claude
+    model: "{{ inputs.plan_model }}"
+    input:
+      args: "{{ inputs.agent_preamble }} {{ inputs.spec }}"
+
+  # Stop when tasks.md is missing or has no task lines
+  - id: guard-tasks
+    type: shell
+    run: 'out=$(bash "$SPECKIT_WORKFLOW_DIR/scripts/require-artifact.sh" tasks); rc=$?; printf "%s\n" "$out" | { tee /dev/tty 2>/dev/null || cat; }; exit $rc'
+
+  # Remember how many tasks were done, so guard-implement can see progress
+  - id: snapshot-tasks
+    type: shell
+    run: 'out=$(bash "$SPECKIT_WORKFLOW_DIR/scripts/require-artifact.sh" snapshot); rc=$?; printf "%s\n" "$out" | { tee /dev/tty 2>/dev/null || cat; }; exit $rc'
+
+  # 5. Implement bang model vua
+  - id: announce-impl-model
+    type: shell
+    run: 'echo "MODEL: implement + tu sua = {{ inputs.impl_model }}" | { tee /dev/tty 2>/dev/null || cat; }'
+
+  - id: implement
+    command: speckit.implement
+    integration: claude
+    model: "{{ inputs.impl_model }}"
+    input:
+      args: "{{ inputs.agent_preamble }} {{ inputs.spec }}"
+
+  # Stop when implement marked no task as done
+  - id: guard-implement
+    type: shell
+    run: 'out=$(bash "$SPECKIT_WORKFLOW_DIR/scripts/require-artifact.sh" implement); rc=$?; printf "%s\n" "$out" | { tee /dev/tty 2>/dev/null || cat; }; exit $rc'
+
+  # Kiem tra doc lap: pipeline tu chay lenh, khong tin vao bao cao cua agent
+  - id: check
+    type: shell
+    run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/run-checks.sh" | { tee /dev/tty 2>/dev/null || cat; }'
+
+  # Tu sua toi da 2 lan. Moi lan tu bo qua neu lan truoc da PASS.
+  - id: attempt-1
+    type: shell
+    # Agent runs can exceed the engine's 300s default.
+    timeout: 1800
+    run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/fix-and-recheck.sh" {{ inputs.impl_model }} | { tee /dev/tty 2>/dev/null || cat; }'
+
+  - id: attempt-2
+    type: shell
+    # Agent runs can exceed the engine's 300s default.
+    timeout: 1800
+    run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/fix-and-recheck.sh" {{ inputs.impl_model }} | { tee /dev/tty 2>/dev/null || cat; }'
+
+  # Ngoai le: van fail sau 2 lan sua thi dung lai hoi ban
+  - id: still-failing
+    type: if
+    condition: "{{ steps.attempt-2.output.stdout | contains('PIPELINE_CHECK=FAIL') }}"
+    then:
+      - id: checks-failed
+        type: gate
+        message: "Kiem tra van fail sau 2 lan tu sua. Xem .specify/pipeline/last-check.log va fix-notes.md. approve = van di tiep, reject = dung de ban xu ly."
+        options: [approve, reject]
+        on_reject: abort
+        verdict_input: checks_verdict
+
+  # v1 se chen them buoc review Opus -> sua Sonnet, kiem tra contract, tao PR
+  # bang overlay "insert_before: summary" (khong can sua file nay).
+
+  - id: summary
+    type: shell
+    run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/summary.sh" | { tee /dev/tty 2>/dev/null || cat; }'

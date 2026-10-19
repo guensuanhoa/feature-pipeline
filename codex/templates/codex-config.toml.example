@@ -1,0 +1,6 @@
+# Copy to ~/.codex/config.toml (or merge into it) if you want these as defaults.
+sandbox_mode = "workspace-write"
+approval_policy = "never"
+
+[sandbox_workspace_write]
+network_access = false
