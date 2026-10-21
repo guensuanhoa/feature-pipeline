@@ -72,15 +72,15 @@ Các file pipeline sinh ra khi chạy nằm trong `.specify/pipeline/` của rep
    specify integration use claude
    ```
 
-3. Cài workflow:
+3. Cài workflow từ GitHub Releases (xem README gốc của repo `feature-pipeline` nếu gặp lỗi):
 
    ```bash
-   bash feature-pipeline/build.sh
-   specify workflow add ./feature-pipeline/dist/feature-pipeline-codex --dev
+   specify workflow catalog add https://github.com/guensuanhoa/feature-pipeline/releases/latest/download/catalog.json --name feature-pipeline
+   specify workflow add feature-pipeline-codex
    specify workflow list
    ```
 
-   Script và prompt dùng chung nằm trong `feature-pipeline/shared/`; sửa ở đó rồi build lại. Nếu `add` báo id đã tồn tại thì `specify workflow remove feature-pipeline-codex` trước.
+   Lên bản mới: `specify workflow update`.
 
 4. **Bắt buộc:** đặt cờ sandbox cho các bước `command:`. Thiếu biến này, `codex exec` chạy sandbox read-only và specify không ghi được spec:
 
@@ -90,7 +90,7 @@ Các file pipeline sinh ra khi chạy nằm trong `.specify/pipeline/` của rep
 
    Bước đầu tiên `check-codex-env` in cảnh báo nếu biến này trống (không dừng pipeline).
 
-5. Tuỳ chọn: chép `feature-pipeline/codex/templates/codex-config.toml.example` vào `~/.codex/config.toml` (gộp tay nếu đã có file).
+5. Tuỳ chọn: chép `.specify/workflows/feature-pipeline-codex/templates/codex-config.toml.example` vào `~/.codex/config.toml` (gộp tay nếu đã có file).
 
 6. `.gitignore`: dùng chung các dòng `.specify/pipeline/*` với bản Claude (xem README của `feature-pipeline/`). `commands.env` nên được commit.
 

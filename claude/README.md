@@ -59,21 +59,21 @@ Các file pipeline sinh ra khi chạy nằm trong `.specify/pipeline/` của rep
    cd ../<ten-project>-pipeline
    ```
 
-3. Chép thư mục `feature-pipeline/` vào worktree, build bundle rồi cài:
+3. Cài workflow từ GitHub Releases (xem README gốc của repo `feature-pipeline` nếu gặp lỗi):
 
    ```bash
-   bash feature-pipeline/build.sh
-   specify workflow add ./feature-pipeline/dist/feature-pipeline --dev
+   specify workflow catalog add https://github.com/guensuanhoa/feature-pipeline/releases/latest/download/catalog.json --name feature-pipeline
+   specify workflow add feature-pipeline
    specify workflow list
    ```
 
-   Script và prompt dùng chung nằm trong `feature-pipeline/shared/`; sửa ở đó rồi build lại. Nếu `add` báo id đã tồn tại thì `specify workflow remove feature-pipeline` trước.
+   Lên bản mới: `specify workflow update`.
 
 4. Cấp quyền cho agent. Chép mẫu rồi chỉnh theo project:
 
    ```bash
    mkdir -p .claude
-   cp feature-pipeline/claude/templates/settings.local.json.example .claude/settings.local.json
+   cp .specify/workflows/feature-pipeline/templates/settings.local.json.example .claude/settings.local.json
    ```
 
    Danh sách này đang viết sẵn cho project Go. Nếu project dùng ngôn ngữ khác, thay các dòng `go ...` bằng lệnh tương ứng. Tên các script `.specify/scripts/bash/...` đã khớp với Spec Kit 1.0.3; nếu bạn dùng bản khác, kiểm tra lại trong thư mục đó. Nếu đã có `.claude/settings.local.json` thì gộp tay, đừng ghi đè.
