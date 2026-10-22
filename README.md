@@ -73,6 +73,8 @@ source ~/.zshrc
 .specify/pipeline/*.status
 .specify/pipeline/current-feature
 .specify/pipeline/fix-notes.md
+.specify/pipeline/implement-report.md
+.specify/pipeline/tasks-done.before
 .specify/pipeline/clarify.log
 .specify/pipeline/open-questions.md
 .specify/pipeline/requirement-updated.md

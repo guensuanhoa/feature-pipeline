@@ -21,6 +21,10 @@ inputs:
   agent_preamble:
     type: string
     default: "Pipeline tu dong, khong co nguoi tra loi. Khong hoi nguoi dung, khong dung cho xac nhan. Quyet dinh trong muc Clarifications cua spec la da chot. Rule nao yeu cau skill chua cai thi ap truc tiep noi dung rule do."
+  # Appended to implement args only: how to tick tasks.md and write the run report that guard-implement checks
+  implement_contract:
+    type: string
+    default: "Hop dong implement: (1) Sau MOI task hoan thanh, sua ngay tasks.md doi '- [ ]' thanh '- [X]'. Chi danh dau khi task da thuc su lam va co bang chung (file da sua, lenh da chay va ket qua). Task chi can xac minh ma khong can sua code van phai chay xac minh roi danh dau; dung tao diff chi de qua guard. Task dieu kien: danh gia dieu kien truoc; dieu kien khong xay ra thi danh dau [X] kem ghi 'N/A - <ly do>' trong report; dieu kien xay ra thi lam xong moi danh dau. Task khong lam duoc (bi chan) thi giu '- [ ]' va ghi ly do vao report. (2) Truoc khi ket thuc, ghi .specify/pipeline/implement-report.md: moi task vua danh dau [X] mot dong '- T001: <bang chung>' (hoac '- T005: N/A - <ly do>'); task bi chan '- T010: BLOCKED - <ly do>'; dung mot dong 'TESTS: not-run|passed|failed|blocked - <lenh va ly do>'. Chi ghi passed khi da chay lenh va thay pass; chua chay thi not-run; loi moi truong thi blocked."
   plan_model:
     type: string
     enum: [opus, sonnet]
@@ -179,7 +183,7 @@ steps:
     type: shell
     run: 'out=$(bash "$SPECKIT_WORKFLOW_DIR/scripts/require-artifact.sh" tasks); rc=$?; printf "%s\n" "$out" | { tee /dev/tty 2>/dev/null || cat; }; exit $rc'
 
-  # Remember how many tasks were done, so guard-implement can see progress
+  # Remember which tasks were already done and clear any stale report, so guard-implement judges this run only
   - id: snapshot-tasks
     type: shell
     run: 'out=$(bash "$SPECKIT_WORKFLOW_DIR/scripts/require-artifact.sh" snapshot); rc=$?; printf "%s\n" "$out" | { tee /dev/tty 2>/dev/null || cat; }; exit $rc'
@@ -194,9 +198,9 @@ steps:
     integration: claude
     model: "{{ inputs.impl_model }}"
     input:
-      args: "{{ inputs.agent_preamble }} {{ inputs.spec }}"
+      args: "{{ inputs.agent_preamble }} {{ inputs.implement_contract }} {{ inputs.spec }}"
 
-  # Stop when implement marked no task as done
+  # Stop unless every task is [X] with evidence in this run's report and a valid TESTS line
   - id: guard-implement
     type: shell
     run: 'out=$(bash "$SPECKIT_WORKFLOW_DIR/scripts/require-artifact.sh" implement); rc=$?; printf "%s\n" "$out" | { tee /dev/tty 2>/dev/null || cat; }; exit $rc'

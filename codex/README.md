@@ -42,7 +42,7 @@ feature-pipeline-codex/
 │   ├── locate-feature.sh              # tìm thư mục spec vừa tạo, đếm câu hỏi mở
 │   ├── clarify-auto.sh                # một vòng clarify headless, đếm lại câu hỏi mở
 │   ├── update-requirement.sh          # phiên Codex interactive ghi câu trả lời vào yêu cầu gốc
-│   ├── require-artifact.sh            # dừng run khi agent không tạo plan/tasks/code
+│   ├── require-artifact.sh            # dừng run khi agent không tạo plan/tasks hoặc chưa hoàn tất implement
 │   ├── accept-suggestions.sh          # gate chọn continue: ghi gợi ý thành quyết định trong spec
 │   ├── run-checks.sh                  # kiểm tra độc lập bằng exit code
 │   ├── fix-and-recheck.sh             # gọi Codex headless sửa lỗi, rồi kiểm tra lại
@@ -122,10 +122,10 @@ Gate duyệt spec: đọc `spec.md` theo đường dẫn mà bước `locate-fea
 
 ## Guard và gate "continue"
 
-- **Guard artifact.** Sau `plan`, `tasks`, `implement`, script `require-artifact.sh` kiểm tra artifact chuẩn Spec Kit trong thư mục feature: `plan.md` (khác template), `tasks.md` có dòng `- [ ] T001`, và implement đánh dấu thêm ít nhất một task `[X]`. Thiếu thì in `GUARD_FAIL stage=<bước> reason=<lý do>` và run dừng ở trạng thái `FAILED`. Lý do cần guard: Spec Kit coi bước `command:` là xong khi agent thoát với mã 0, kể cả khi agent từ chối làm.
+- **Guard artifact.** Sau `plan`, `tasks`, `implement`, script `require-artifact.sh` kiểm tra artifact chuẩn Spec Kit trong thư mục feature: `plan.md` (khác template), `tasks.md` có dòng `- [ ] T001`, và `implement` đạt đủ: mọi task trong `tasks.md` là `[X]`; mỗi task mới xong trong run này có dòng bằng chứng `- T001: <bằng chứng>` (task điều kiện không xảy ra ghi `- T005: N/A - <lý do>`) trong `.specify/pipeline/implement-report.md`; report có dòng `TESTS: not-run|passed|failed|blocked - <lệnh/lý do>`. Không cần diff code: task chỉ xác minh vẫn đạt. Task bị chặn giữ `[ ]` và guard dừng run, in danh sách task còn mở. Thiếu thì in `GUARD_FAIL stage=<bước> reason=<lý do>` và run dừng ở trạng thái `FAILED`. Lý do cần guard: Spec Kit coi bước `command:` là xong khi agent thoát với mã 0, kể cả khi agent từ chối làm.
 - **Gate câu hỏi mở chọn `continue`.** `accept-suggestions.sh` lấy phần `— gợi ý:` của từng marker `[NEEDS CLARIFICATION: ...]`, ghi thành `- Q: … → A: …` trong `## Clarifications` (session "accepted at pipeline gate"), rồi xóa marker nằm riêng một dòng. Marker nằm giữa câu được thay bằng chính câu gợi ý. Marker không có gợi ý hoặc sai định dạng thì spec giữ nguyên và run dừng.
 - **`agent_preamble`.** Câu mở đầu ghép trước `spec` cho `plan`, `tasks`, `implement`, báo agent rằng không có người trả lời. `specify` dùng `spec` nguyên bản vì đó là mô tả feature. Đổi nội dung bằng `-i agent_preamble="..."`.
-- Chạy lại trên feature đã đánh dấu xong mọi task thì `guard-implement` luôn fail, vì không còn task nào để đánh dấu thêm. Khi đó bỏ qua run này hoặc bỏ dấu `[X]` của task cần làm lại.
+- Chạy lại trên feature đã xong mọi task: `snapshot-tasks` ghi lại các task đã xong và xóa report cũ, nên `guard-implement` chỉ cần report mới (có dòng `TESTS:`), không đòi tick thêm task. Hợp đồng agent (tick `tasks.md`, ghi report) nằm trong input `implement_contract`; đổi bằng `-i implement_contract=...`.
 - Test script: `bash feature-pipeline/tests/run-tests.sh` (không nằm trong bundle).
 
 ## Khi hết quota

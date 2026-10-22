@@ -49,12 +49,64 @@ check "tasks without task ids" 1 "reason=no-tasks" guard tasks
 printf '# Tasks\n\n- [ ] T001 First\n- [ ] T002 Second\n' > specs/001-demo/tasks.md
 check "tasks written" 0 "tasks=2" guard tasks
 
+T=specs/001-demo/tasks.md
+R=.specify/pipeline/implement-report.md
+
 check "snapshot" 0 "done=0" guard snapshot
-check "implement did nothing" 1 "reason=no-task-done" guard implement
-printf '# Tasks\n\n- [X] T001 First\n- [ ] T002 Second\n' > specs/001-demo/tasks.md
-check "implement without code change warns" 0 "CẢNH BÁO" guard implement
+
+# Task not done: guard blocks and names the open tasks
+check "implement did nothing" 1 "tasks-incomplete" guard implement
+check "implement did nothing names open tasks" 1 "T001,T002 còn [ ]" guard implement
+
+# One of two tasks done: still blocked, even with a report
+printf '# Tasks\n\n- [X] T001 First\n- [ ] T002 Second\n' > $T
+printf -- '- T001: ran ./check ok\nTESTS: passed - go test ./...\n' > $R
+check "partial progress still blocked" 1 "T002 còn [ ]" guard implement
+printf -- '- T002: BLOCKED - db down\n' >> $R
+check "blocked reason is shown" 1 "BLOCKED - db down" guard implement
+
+# (a) Verification-only run: every task checked with evidence, no code change
+printf '# Tasks\n\n- [X] T001 First\n- [X] T002 Second after T001\n' > $T
+printf -- '- T001: confirmed handler already validates input (read api.go:40)\n- T002: N/A - no migration needed, schema unchanged\nTESTS: not-run - no runnable command for this change\n' > $R
+check "verified without code change passes" 0 "GUARD_OK stage=implement tasks=2 new=2 TESTS: not-run" guard implement
+check "no code change is only a note" 0 "GHI CHÚ" guard implement
+
+# Report is required and must carry evidence and an honest test status
+rm $R
+check "missing report fails" 1 "missing-report" guard implement
+printf -- '- T001: ok\nTESTS: passed - go test\n' > $R
+check "task without evidence fails" 1 "no-evidence" guard implement
+check "task without evidence names the task" 1 "cho: T002" guard implement
+printf -- '- T001: ok\n- T002:\nTESTS: passed - go test\n' > $R
+check "empty evidence fails" 1 "cho: T002" guard implement
+printf -- '- T001: ok\n- T002: ok\nAll tests passed.\n' > $R
+check "missing TESTS line fails" 1 "no-test-status" guard implement
+printf -- '- T001: ok\n- T002: ok\nTESTS: green\n' > $R
+check "unknown TESTS state fails" 1 "no-test-status" guard implement
+for st in not-run passed failed blocked; do
+  printf -- '- T001: ok\n- T002: ok\nTESTS: %s - x\n' "$st" > $R
+  check "TESTS state $st accepted" 0 "TESTS: $st" guard implement
+done
+
+# Tasks ticked before this run need no new evidence, but the run still needs a report
+printf -- 'TESTS: not-run - nothing to run\n' > $R
+check "rerun with all tasks already done" 0 "tasks=2 new=0" bash -c 'cd "$1" && bash "$2" snapshot >/dev/null && printf "TESTS: not-run - nothing to run\n" > '"$R"' && bash "$2" implement' _ "$PWD" "$SCRIPTS/require-artifact.sh"
+check "snapshot removes stale report" 1 "" bash -c 'cd "$1" && bash "$2" snapshot >/dev/null && test -f '"$R" _ "$PWD" "$SCRIPTS/require-artifact.sh"
+check "stale report cannot satisfy next run" 1 "missing-report" guard implement
+
+# Code changes outside the feature dir drop the note
+printf '# Tasks\n\n- [ ] T001 First\n' > $T
+guard snapshot >/dev/null
+printf '# Tasks\n\n- [X] T001 First\n' > $T
+printf -- '- T001: edited app\nTESTS: passed - make test\n' > $R
 echo "code" > app.txt
-check "implement with code change" 0 "done=0->1" guard implement
+check "implement with code change has no note" 0 "TESTS: passed" guard implement
+if [[ "$(guard implement 2>&1)" == *"GHI CHÚ"* ]]; then FAIL=$((FAIL + 1)); echo "FAIL code change still prints note"; else PASS=$((PASS + 1)); echo "PASS code change prints no note"; fi
+
+# Task IDs mentioned inside a description are not tasks
+printf '# Tasks\n\n- [X] T001 Do it\n- [ ] T002 Run after T001\n' > $T
+check "only own task ID counts" 1 "reason=tasks-incomplete" guard implement
+check "description IDs are not listed as open" 1 "T002 còn" guard implement
 
 rm .specify/pipeline/current-feature
 check "no current feature" 1 "reason=no-feature-dir" guard plan
