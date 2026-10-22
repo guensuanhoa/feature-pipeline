@@ -8,7 +8,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROMPT_FILE="$SCRIPT_DIR/../prompts/clarify-auto.md"
 
-MODEL="${1:-opus}"
+MODEL="${1:-sonnet}"
 ROUND="${2:-?}"
 case "$MODEL" in
   opus|sonnet|haiku) ;;

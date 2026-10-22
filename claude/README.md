@@ -3,8 +3,8 @@
 Pipeline tự động cho một feature, chạy trên máy local bằng workflow engine của Spec Kit:
 
 ```
-dò lệnh test (lần đầu) → specify (Opus) → tự clarify tối đa 3 vòng (Opus)
-→ [hỏi bạn nếu vẫn còn câu hỏi] → [bạn duyệt spec] → plan → tasks (Opus)
+dò lệnh test (lần đầu) → specify (Sonnet) → tự clarify tối đa 3 vòng (Sonnet)
+→ [hỏi bạn nếu vẫn còn câu hỏi] → [bạn duyệt spec] → plan → tasks (Sonnet)
 → implement (Sonnet) → kiểm tra độc lập → tự sửa tối đa 2 lần (Sonnet)
 → [hỏi bạn nếu vẫn fail] → tóm tắt
 ```
@@ -101,7 +101,7 @@ specify workflow run feature-pipeline \
   -i spec="Đọc yêu cầu trong docs/handoffs/<file-handoff>.md"
 ```
 
-Có thể truyền mô tả trực tiếp thay cho đường dẫn file. Đổi model nếu cần: `-i plan_model=sonnet` hoặc `-i impl_model=opus`. Chỉ nhận các giá trị trong danh sách cho phép.
+Có thể truyền mô tả trực tiếp thay cho đường dẫn file. Mặc định cả hai là `sonnet` để tiết kiệm. Spec phức tạp thì đổi: `-i plan_model=opus`. Chỉ nhận các giá trị trong danh sách cho phép.
 
 **Không truyền `spec_verdict` khi chạy lệnh `run`.** Nếu truyền sẵn `approve`, gate duyệt spec sẽ tự thông qua mà bạn chưa đọc. Chỉ dùng các input `*_verdict` khi `resume`.
 
@@ -142,7 +142,7 @@ Mỗi lần chỉ chạy một feature để tránh đốt cửa sổ 5 giờ nh
 Bộ file đã được cài và chạy thử với Spec Kit 1.0.3, dùng một `claude` giả để kiểm tra luồng điều khiển:
 
 - Workflow hợp lệ, cài được bằng `specify workflow add ./feature-pipeline/dist/feature-pipeline --dev`.
-- Spec Kit gọi `claude -p /speckit-specify ... --model opus`, plan và tasks dùng `opus`, implement dùng `sonnet`: model theo từng bước hoạt động.
+- Spec Kit gọi `claude -p /speckit-specify ... --model sonnet`, plan, tasks và implement đều dùng `sonnet`: model theo từng bước hoạt động.
 - Gate dừng đúng chỗ khi chạy không tương tác, `resume` với verdict chạy tiếp hoặc dừng đúng.
 - Vòng tự sửa: sửa được thì bỏ qua lần thứ hai; không sửa được thì dừng ở gate ngoại lệ.
 - Lần chạy thứ hai không hỏi lại lệnh test.

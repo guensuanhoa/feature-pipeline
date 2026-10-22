@@ -7,7 +7,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROMPT_FILE="$SCRIPT_DIR/../prompts/update-requirement.md"
 
-MODEL="${1:-opus}"
+MODEL="${1:-sonnet}"
 case "$MODEL" in
   opus|sonnet|haiku) ;;
   *) echo "Model không hợp lệ: $MODEL"; exit 0 ;;

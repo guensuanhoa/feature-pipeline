@@ -28,7 +28,7 @@ inputs:
   plan_model:
     type: string
     enum: [opus, sonnet]
-    default: "opus"
+    default: "sonnet"
   impl_model:
     type: string
     enum: [sonnet, opus, haiku]
