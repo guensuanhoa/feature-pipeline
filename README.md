@@ -24,7 +24,7 @@ specify workflow update                        # upgrade all catalog installs (c
 Pin a version instead of `add` (installs as `source=url`, so `update` skips it):
 
 ```bash
-specify workflow add feature-pipeline --from https://github.com/guensuanhoa/feature-pipeline/releases/download/v0.2.0/feature-pipeline-0.2.0.zip
+specify workflow add feature-pipeline --from https://github.com/guensuanhoa/feature-pipeline/releases/download/v0.2.5/feature-pipeline-0.2.5.zip
 ```
 
 Troubleshooting:
