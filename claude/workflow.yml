@@ -51,6 +51,11 @@ inputs:
     default: ""
 
 steps:
+  # Stop before any agent runs when the allowlist is missing Spec Kit scripts (headless agents cannot ask)
+  - id: check-permissions
+    type: shell
+    run: 'out=$(bash "$SPECKIT_WORKFLOW_DIR/scripts/check-permissions.sh"); rc=$?; printf "%s\n" "$out" | { tee /dev/tty 2>/dev/null || cat; }; exit $rc'
+
   # Spec Kit captures shell step output without printing it; tee to /dev/tty keeps it visible
   # (falls back to plain stdout when there is no terminal, e.g. CI).
   # 1. Do lenh build/lint/test mot lan, luu vao .specify/pipeline/commands.env

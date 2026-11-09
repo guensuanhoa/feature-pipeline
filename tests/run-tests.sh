@@ -171,6 +171,21 @@ else
   FAIL=$((FAIL + 1)); echo "FAIL single root stack does not warn"; printf '%s\n' "$out" | sed 's/^/    /'
 fi
 
+# --- check-permissions.sh (claude variant) ---
+PERMS="$HERE/../claude/scripts/check-permissions.sh"
+perms() { HOME="$REPO/home" bash "$PERMS"; }
+
+new_repo
+check "no settings file" 1 "PERMISSIONS_MISSING" perms
+mkdir -p .claude
+printf '{"permissions":{"allow":["Bash(.specify/scripts/bash/setup-plan.sh:*)"]}}\n' > .claude/settings.local.json
+check "partial allowlist names setup-tasks" 1 'Bash(.specify/scripts/bash/setup-tasks.sh:*)' perms
+check "partial allowlist skips setup-plan" 1 "PERMISSIONS_MISSING" perms
+cp "$HERE/../claude/templates/settings.local.json.example" .claude/settings.local.json
+check "template covers all scripts" 0 "PERMISSIONS_OK" perms
+printf '{"permissions":{"allow":["Bash(.specify/scripts/bash/*:*)"]}}\n' > .claude/settings.local.json
+check "wildcard covers all scripts" 0 "PERMISSIONS_OK" perms
+
 echo
 echo "passed=$PASS failed=$FAIL"
 [[ "$FAIL" == 0 ]]
