@@ -70,6 +70,13 @@ fi
 git --no-pager diff --cached --stat
 echo
 
+# Unlock the signing key once so the commit below can ask for the passphrase in this terminal
+if (( ! DRY_RUN )) && [[ "$(git config --get commit.gpgsign || true)" == "true" ]]; then
+  [[ -t 0 ]] || die "cần chạy trong terminal để nhập passphrase GPG"
+  GPG_TTY="$(tty)"; export GPG_TTY
+  echo "unlock" | gpg --clearsign >/dev/null
+fi
+
 # --cleanup=strip also drops any '#' line that slipped into the message
 run git commit --cleanup=strip -F "$MSG_FILE"
 run git push "$REMOTE" "$BRANCH"
