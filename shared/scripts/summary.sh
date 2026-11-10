@@ -17,6 +17,12 @@ echo
 echo "Thay đổi so với commit gần nhất:"
 git status --short 2>/dev/null | head -40
 echo
+MANUAL_TASKS="$(grep -hE '^[[:space:]]*- \[ \] T[0-9]+ \[MANUAL\]' "$FEATURE"/tasks.md 2>/dev/null | cut -c1-200 || true)"
+if [[ -n "$MANUAL_TASKS" ]]; then
+  echo "Việc bạn cần tự làm (task [MANUAL], agent đã bỏ qua):"
+  printf '%s\n' "$MANUAL_TASKS" | sed 's/^/  /'
+  echo
+fi
 echo "Tiếp theo: xem diff, tự tạo PR (v0 chưa tự tạo PR)."
 echo "Log: $DIR/last-check.log, $DIR/fix.log, $DIR/fix-notes.md"
 exit 0

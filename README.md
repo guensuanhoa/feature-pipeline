@@ -54,6 +54,8 @@ cp .specify/workflows/feature-pipeline/templates/settings.local.json.example .cl
 
 `settings.local.json` is the list of commands the agent may run. The template targets Go; replace the `go ...` lines with your project's build/test commands. If the file already exists, merge by hand.
 
+Skipping this step is fine for the Claude variant: the first workflow step checks the allowlist (Spec Kit scripts, `Edit`, `Write`). If rules are missing it asks you to approve or reject. On approve it merges the missing rules into that project's `.claude/settings.local.json` (needs `jq`) and continues. Build/test commands are not added; list those yourself.
+
 **Codex (`feature-pipeline-codex`)**
 
 ```bash

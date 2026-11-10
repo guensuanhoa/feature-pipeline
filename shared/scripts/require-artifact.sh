@@ -7,7 +7,8 @@
 #
 # implement proves the current run finished its tasks, not just that some box was ticked:
 #   - snapshot records the IDs already done and removes any stale report from an earlier run
-#   - every task in tasks.md must be [X] (a blocked task keeps [ ] and fails the guard)
+#   - every task in tasks.md must be [X] (a blocked task keeps [ ] and fails the guard),
+#     except tasks marked [MANUAL]: those are left to the user on purpose
 #   - every task newly done in this run needs an evidence line in the run report
 #   - the report needs a TESTS line saying not-run | passed | failed | blocked
 # A run that verified tasks without touching code passes; no code diff is required.
@@ -43,6 +44,11 @@ TASKS="$FEATURE_DIR/tasks.md"
 # Own task IDs (one per line) of tasks.md checklist lines whose box matches $1 (bracket body, e.g. "xX")
 task_ids() {
   sed -nE "s/^[[:space:]]*- \\[[$1]\\] (T[0-9]+).*/\\1/p" "$TASKS" 2>/dev/null | awk '!seen[$0]++'
+}
+
+# Open task IDs read from stdin, so tasks.md lines can be filtered first
+task_ids_from_stdin() {
+  sed -nE "s/^[[:space:]]*- \\[ \\] (T[0-9]+).*/\\1/p" | awk '!seen[$0]++'
 }
 
 # Report line for a task: "- T001: <evidence>"; prints the evidence text, empty when missing
@@ -83,7 +89,7 @@ case "$STAGE" in
     problem() { PROBLEMS+=("$1"); DETAILS+=("$2"); }
 
     # 1. Every task must be done. A blocked task keeps [ ] so the run cannot pass silently.
-    OPEN="$(task_ids " ")"
+    OPEN="$(sed -E '/\[MANUAL\]/d' "$TASKS" | task_ids_from_stdin)"
     if [[ -n "$OPEN" ]]; then
       detail="$(printf '%s\n' "$OPEN" | join_ids) còn [ ] trong $TASKS"
       if [[ -f "$REPORT" ]]; then

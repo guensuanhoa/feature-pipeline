@@ -24,7 +24,7 @@ inputs:
   # Appended to implement args only: how to tick tasks.md and write the run report that guard-implement checks
   implement_contract:
     type: string
-    default: "Hop dong implement: (1) Sau MOI task hoan thanh, sua ngay tasks.md doi '- [ ]' thanh '- [X]'. Chi danh dau khi task da thuc su lam va co bang chung (file da sua, lenh da chay va ket qua). Task chi can xac minh ma khong can sua code van phai chay xac minh roi danh dau; dung tao diff chi de qua guard. Task dieu kien: danh gia dieu kien truoc; dieu kien khong xay ra thi danh dau [X] kem ghi 'N/A - <ly do>' trong report; dieu kien xay ra thi lam xong moi danh dau. Task khong lam duoc (bi chan) thi giu '- [ ]' va ghi ly do vao report. (2) Truoc khi ket thuc, ghi .specify/pipeline/implement-report.md: moi task vua danh dau [X] mot dong '- T001: <bang chung>' (hoac '- T005: N/A - <ly do>'); task bi chan '- T010: BLOCKED - <ly do>'; dung mot dong 'TESTS: not-run|passed|failed|blocked - <lenh va ly do>'. Chi ghi passed khi da chay lenh va thay pass; chua chay thi not-run; loi moi truong thi blocked."
+    default: "Hop dong implement: (1) Sau MOI task hoan thanh, sua ngay tasks.md doi '- [ ]' thanh '- [X]'. Chi danh dau khi task da thuc su lam va co bang chung (file da sua, lenh da chay va ket qua). Task chi can xac minh ma khong can sua code van phai chay xac minh roi danh dau; dung tao diff chi de qua guard. Task dieu kien: danh gia dieu kien truoc; dieu kien khong xay ra thi danh dau [X] kem ghi 'N/A - <ly do>' trong report; dieu kien xay ra thi lam xong moi danh dau. Task co [MANUAL] do nguoi dung tu lam: bo qua, khong sua file lien quan, khong danh dau, khong ghi vao report. Task khong lam duoc (bi chan) thi giu '- [ ]' va ghi ly do vao report. (2) Truoc khi ket thuc, ghi .specify/pipeline/implement-report.md: moi task vua danh dau [X] mot dong '- T001: <bang chung>' (hoac '- T005: N/A - <ly do>'); task bi chan '- T010: BLOCKED - <ly do>'; dung mot dong 'TESTS: not-run|passed|failed|blocked - <lenh va ly do>'. Chi ghi passed khi da chay lenh va thay pass; chua chay thi not-run; loi moi truong thi blocked."
   plan_model:
     type: string
     enum: [opus, sonnet]
@@ -33,6 +33,14 @@ inputs:
     type: string
     enum: [sonnet, opus, haiku]
     default: "sonnet"
+  permissions_verdict:
+    type: string
+    enum: ["", approve, reject]
+    default: ""
+  manual_tasks_verdict:
+    type: string
+    enum: ["", approve, reject]
+    default: ""
   commands_verdict:
     type: string
     enum: ["", approve, reject]
@@ -51,10 +59,26 @@ inputs:
     default: ""
 
 steps:
-  # Stop before any agent runs when the allowlist is missing Spec Kit scripts (headless agents cannot ask)
+  # Headless agents cannot answer permission prompts. Find missing allowlist rules (Spec Kit scripts,
+  # Edit, Write) before any agent runs; on approve, add them to this project's .claude/settings.local.json.
   - id: check-permissions
     type: shell
-    run: 'out=$(bash "$SPECKIT_WORKFLOW_DIR/scripts/check-permissions.sh"); rc=$?; printf "%s\n" "$out" | { tee /dev/tty 2>/dev/null || cat; }; exit $rc'
+    run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/check-permissions.sh" | { tee /dev/tty 2>/dev/null || cat; }'
+
+  - id: permissions-missing
+    type: if
+    condition: "{{ steps.check-permissions.output.stdout | contains('PERMISSIONS_MISSING') }}"
+    then:
+      - id: approve-permissions
+        type: gate
+        message: "Project thieu quyen cho agent (xem danh sach rule o tren). approve = pipeline tu them cac rule vao .claude/settings.local.json cua project nay roi chay tiep. reject = dung de ban tu xu ly."
+        options: [approve, reject]
+        on_reject: abort
+        verdict_input: permissions_verdict
+
+      - id: fix-permissions
+        type: shell
+        run: 'out=$(bash "$SPECKIT_WORKFLOW_DIR/scripts/check-permissions.sh" --apply); rc=$?; printf "%s\n" "$out" | { tee /dev/tty 2>/dev/null || cat; }; exit $rc'
 
   # Spec Kit captures shell step output without printing it; tee to /dev/tty keeps it visible
   # (falls back to plain stdout when there is no terminal, e.g. CI).
@@ -187,6 +211,27 @@ steps:
   - id: guard-tasks
     type: shell
     run: 'out=$(bash "$SPECKIT_WORKFLOW_DIR/scripts/require-artifact.sh" tasks); rc=$?; printf "%s\n" "$out" | { tee /dev/tty 2>/dev/null || cat; }; exit $rc'
+
+  # The privacy hook blocks .env* and other secret files for headless agents. Find tasks that touch them now,
+  # and on approve mark them [MANUAL] so implement skips them instead of dying on the first denied write.
+  - id: scan-sensitive-tasks
+    type: shell
+    run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/mark-manual-tasks.sh" | { tee /dev/tty 2>/dev/null || cat; }'
+
+  - id: sensitive-tasks-found
+    type: if
+    condition: "{{ steps.scan-sensitive-tasks.output.stdout | contains('SENSITIVE_TASKS') }}"
+    then:
+      - id: approve-manual-tasks
+        type: gate
+        message: "Co task dung file nhay cam (xem danh sach o tren), agent headless khong sua duoc. approve = danh dau [MANUAL], agent bo qua, ban tu lam sau (cuoi pipeline co danh sach). reject = dung de ban sua tasks.md."
+        options: [approve, reject]
+        on_reject: abort
+        verdict_input: manual_tasks_verdict
+
+      - id: mark-manual-tasks
+        type: shell
+        run: 'bash "$SPECKIT_WORKFLOW_DIR/scripts/mark-manual-tasks.sh" --apply | { tee /dev/tty 2>/dev/null || cat; }'
 
   # Remember which tasks were already done and clear any stale report, so guard-implement judges this run only
   - id: snapshot-tasks

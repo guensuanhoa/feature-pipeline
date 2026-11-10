@@ -1,3 +1,6 @@
 dist/
 .DS_Store
 .release/
+
+# GPG key backups
+*.key

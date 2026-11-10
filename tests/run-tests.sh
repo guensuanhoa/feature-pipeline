@@ -171,20 +171,69 @@ else
   FAIL=$((FAIL + 1)); echo "FAIL single root stack does not warn"; printf '%s\n' "$out" | sed 's/^/    /'
 fi
 
-# --- check-permissions.sh (claude variant) ---
-PERMS="$HERE/../claude/scripts/check-permissions.sh"
-perms() { HOME="$REPO/home" bash "$PERMS"; }
+# --- mark-manual-tasks.sh (claude variant) ---
+MARK="$HERE/../claude/scripts/mark-manual-tasks.sh"
+mark() { bash "$MARK" "$@"; }
 
 new_repo
-check "no settings file" 1 "PERMISSIONS_MISSING" perms
+T=specs/001-demo/tasks.md
+printf '# Tasks\n\n- [ ] T001 Edit manifest.json\n- [ ] T002 [P] Add VAR to `.env` and `.env.qa`\n- [ ] T003 Copy to .env.example\n- [X] T004 Done earlier, touched .env.local\n- [ ] T005 Use item.key in src/a.ts\n- [ ] T006 Add deploy/server.pem\n' > "$T"
+check "scan lists env task" 0 "SENSITIVE_TASKS" mark
+check "scan shows T002" 0 "T002" mark
+check "scan shows pem task" 0 "T006" mark
+if [[ "$(mark)" == *"T001"* || "$(mark)" == *"T003"* || "$(mark)" == *"T004"* || "$(mark)" == *"T005"* ]]; then
+  FAIL=$((FAIL + 1)); echo "FAIL scan ignores plain, example, done and code-identifier tasks"
+else
+  PASS=$((PASS + 1)); echo "PASS scan ignores plain, example, done and code-identifier tasks"
+fi
+check "apply marks tasks" 0 "SENSITIVE_MARKED" mark --apply
+check "T002 marked manual" 0 "- [ ] T002 [MANUAL] [P] Add VAR" cat "$T"
+check "T001 untouched" 0 "- [ ] T001 Edit manifest.json" cat "$T"
+check "rescan after apply finds nothing" 0 "SENSITIVE_NONE" mark
+printf '# Tasks\n\n- [ ] T001 Plain\n' > "$T"
+check "clean tasks.md" 0 "SENSITIVE_NONE" mark
+
+# Guard: manual tasks do not block implement, other open tasks still do
+new_repo
+guard snapshot >/dev/null
+T=specs/001-demo/tasks.md
+R=.specify/pipeline/implement-report.md
+printf '# Tasks\n\n- [X] T001 Done\n- [ ] T002 [MANUAL] Add VAR to .env\n' > "$T"
+printf -- '- T001: edited a.go\nTESTS: not-run - nothing\n' > "$R"
+check "manual task does not fail guard" 0 "GUARD_OK stage=implement" guard implement
+printf '# Tasks\n\n- [X] T001 Done\n- [ ] T002 [MANUAL] Add VAR to .env\n- [ ] T003 Other\n' > "$T"
+check "non-manual open task still fails guard" 1 "T003 còn [ ]" guard implement
+
+# --- check-permissions.sh (claude variant) ---
+PERMS="$HERE/../claude/scripts/check-permissions.sh"
+perms() { HOME="$REPO/home" bash "$PERMS" "$@"; }
+
+new_repo
+check "no settings file" 0 "PERMISSIONS_MISSING" perms
 mkdir -p .claude
 printf '{"permissions":{"allow":["Bash(.specify/scripts/bash/setup-plan.sh:*)"]}}\n' > .claude/settings.local.json
-check "partial allowlist names setup-tasks" 1 'Bash(.specify/scripts/bash/setup-tasks.sh:*)' perms
-check "partial allowlist skips setup-plan" 1 "PERMISSIONS_MISSING" perms
+check "partial allowlist names setup-tasks" 0 'Bash(.specify/scripts/bash/setup-tasks.sh:*)' perms
+check "partial allowlist skips setup-plan" 0 "PERMISSIONS_MISSING" perms
 cp "$HERE/../claude/templates/settings.local.json.example" .claude/settings.local.json
 check "template covers all scripts" 0 "PERMISSIONS_OK" perms
-printf '{"permissions":{"allow":["Bash(.specify/scripts/bash/*:*)"]}}\n' > .claude/settings.local.json
+printf '{"permissions":{"allow":["Edit","Write","Bash(.specify/scripts/bash/*:*)"]}}\n' > .claude/settings.local.json
 check "wildcard covers all scripts" 0 "PERMISSIONS_OK" perms
+printf '{"permissions":{"allow":["Bash(.specify/scripts/bash/*:*)"]}}\n' > .claude/settings.local.json
+check "scripts-only allowlist misses Edit" 0 '  "Edit",' perms
+check "scripts-only allowlist misses Write" 0 '  "Write",' perms
+printf '{"permissions":{"defaultMode":"acceptEdits","allow":["Bash(.specify/scripts/bash/*:*)"]}}\n' > .claude/settings.local.json
+check "acceptEdits covers Edit and Write" 0 "PERMISSIONS_OK" perms
+
+# --apply merges missing rules into the project's settings.local.json and keeps existing keys
+printf '{"hooks":{"x":1},"permissions":{"allow":["Bash(ls:*)"]}}\n' > .claude/settings.local.json
+check "apply adds missing rules" 0 "PERMISSIONS_FIXED" perms --apply
+check "apply result is now OK" 0 "PERMISSIONS_OK" perms
+check "apply keeps existing allow rule" 0 "Bash(ls:*)" jq -c '.permissions.allow' .claude/settings.local.json
+check "apply keeps unrelated keys" 0 '{"x":1}' jq -c '.hooks' .claude/settings.local.json
+rm .claude/settings.local.json
+check "apply creates missing settings file" 0 "PERMISSIONS_FIXED" perms --apply
+echo "{bad" > .claude/settings.local.json
+check "apply on invalid JSON fails" 1 "PERMISSIONS_FIX_FAILED" perms --apply
 
 echo
 echo "passed=$PASS failed=$FAIL"
